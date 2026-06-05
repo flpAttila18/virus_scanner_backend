@@ -9,5 +9,7 @@ namespace WebApplication1.models
                 
         }
         public DbSet<User> Users { get; set; }
+
+        public DbSet<Viruses> viruses { get; set; } 
     }
 }

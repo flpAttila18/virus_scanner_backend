@@ -53,12 +53,13 @@ namespace WebApplication1.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginDto dto)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.UserName == dto.UserName);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
             if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.Password))
             {
                 return Unauthorized(new { error = "Hibás felhasználónév vagy jelszó" });
             }
-            ;
+            
+
 
             var token = GenerateJwtToken(user);
             var cookieOptions = new CookieOptions
@@ -144,7 +145,7 @@ namespace WebApplication1.Controllers
                     SameSite = SameSiteMode.Strict
                 };
 
-                Response.Cookies.Delete("X-Auth-token");
+                Response.Cookies.Delete("X-Auth-token", cookieOptons);
                 return Ok(new { message = "sikeres kijelentkezés" });
             }
             catch (Exception)

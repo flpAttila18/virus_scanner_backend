@@ -12,7 +12,7 @@
 
     public class LoginDto
     {
-        public string UserName { get; set; } = string.Empty; // Átírtam Emailről UserName-re, mert a kontroller ezt várja bejelentkezéskor!
+        public string Email { get; set; } = string.Empty; // Átírtam Emailről UserName-re, mert a kontroller ezt várja bejelentkezéskor!
         public string Password { get; set; } = string.Empty;
     }
 }
