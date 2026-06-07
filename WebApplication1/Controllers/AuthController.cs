@@ -153,7 +153,46 @@ namespace WebApplication1.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Váratlan szerverhiba történt." });
             }
         }
+        [Authorize]
+        [HttpGet("history")]
+        public async Task<IActionResult> GetUserHistory()
+        {
+            try
+            {
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userIdClaim))
+                {
+                    return Unauthorized(new { error = "Nem található felhasználói azonosító a tokenben." });
+                }
+                int curreuntUserId = int.Parse(userIdClaim);
+
+                var history = await _context.viruses
+                    .Where(v => v.userId == curreuntUserId)
+                    .Select(v => new
+                    {
+                        v.Id,
+                        v.FileName,
+                        v.VirusName,
+                        v.virusType,
+                        v.userId,
+                    })
+                    .ToListAsync();
+
+
+
+                return Ok(history);
+
+
+            }
+            catch (Exception)
+            {
+
+                return StatusCode(500, new { error = $"Hiba a történet lekérése során   " });
+            }
+        }
 
     }
+
+    
 }
 

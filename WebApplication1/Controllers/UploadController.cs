@@ -69,22 +69,25 @@ namespace WebApplication1.Controllers
                 {
                     FileName = file.FileName,
                     userId = int.Parse(userIdClaim),
-                    VirusName = "",
-                    virusType = ""
+                    VirusName = "Tiszta",
+                    virusType = "Clean"
                 };
 
 
                 if (cloudmersiveResult != null && cloudmersiveResult.CleanResult == true)
                 {
                     response.scanResult.IsClean = true;
-                    response.Message = "A file sikeresen ellenőrizve , tiszta";
+                    response.Message = "A fájl sikeresen ellenőrizve, teljesen tiszta.";
                 }
                 // Javítva: Kivettem a felesleges zárójelet a sor végéről
                 else if (cloudmersiveResult != null && cloudmersiveResult.FoundViruses != null && cloudmersiveResult.FoundViruses.Count > 0)
                 {
-                    var virusNames = cloudmersiveResult.FoundViruses[0];
+                    response.Message = $"Figyelem! Veszélyes fájl észlelve!";
+
+                    // Frissítjük a DB rekordot a vírus adataival
                     dbresult.VirusName = cloudmersiveResult.FoundViruses[0].VirusName;
                     dbresult.virusType = "Malware";
+
                     foreach (var virus in cloudmersiveResult.FoundViruses)
                     {
                         response.scanResult.FoundViruses.Add(new VirusDetails
