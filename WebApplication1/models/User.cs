@@ -25,5 +25,8 @@ namespace WebApplication1.models
         [Required]
         [Column("role")]
         public string Role { get; set; } = string.Empty;
+
+        [Column("profile_pic")]
+        public string? Profile_Pic { get; set; } = "default.jpg";
     }
 }

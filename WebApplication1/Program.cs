@@ -79,6 +79,7 @@ if (app.Environment.IsDevelopment())
 app.UseRouting();
 app.UseCors("ReactPolicy");
 
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 

@@ -6,7 +6,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using WebApplication1.models;
-
+using Microsoft.AspNetCore.Http;
 
 
 namespace WebApplication1.Controllers
@@ -17,11 +17,13 @@ namespace WebApplication1.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IWebHostEnvironment _environment;
 
-        public AuthController(AppDbContext context, IConfiguration configuration)
+        public AuthController(AppDbContext context, IConfiguration configuration, IWebHostEnvironment environment)
         {
             _context = context;
             _configuration = configuration;
+            _environment = environment;
         }
 
 
@@ -40,8 +42,10 @@ namespace WebApplication1.Controllers
                 Email = dto.Email,
                 UserName = dto.UserName,
                 Password = hashedPassowrd,
-                Role = "user"
-                
+                Role = "user",
+                Profile_Pic = "default.jpg"
+
+
             };
 
             _context.Users.Add(newUser);
@@ -58,7 +62,7 @@ namespace WebApplication1.Controllers
             {
                 return Unauthorized(new { error = "Hibás felhasználónév vagy jelszó" });
             }
-            
+
 
 
             var token = GenerateJwtToken(user);
@@ -71,8 +75,8 @@ namespace WebApplication1.Controllers
             };
             Response.Cookies.Append("X-Auth-token", token, cookieOptions);
 
-            
-            return Ok(new {message =$"sikeres bejelentkezés!"});
+
+            return Ok(new { message = $"sikeres bejelentkezés!" });
         }
         [NonAction]
         public string GenerateJwtToken(User user)
@@ -86,7 +90,8 @@ namespace WebApplication1.Controllers
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Name ,user.UserName),
                 new Claim(ClaimTypes.Email , user.Email),
-                new Claim(ClaimTypes.Role , user.Role ?? "user")
+                new Claim(ClaimTypes.Role , user.Role ?? "user"),
+                new Claim("ProfilePicture" , user.Profile_Pic ?? "default.jpg")
             };
 
             var tokenDescription = new SecurityTokenDescriptor
@@ -106,24 +111,36 @@ namespace WebApplication1.Controllers
 
         [Authorize]
         [HttpGet("whoami")]
-        public IActionResult whoami()
+        public async Task<IActionResult> whoami() // async lett és Task<IActionResult>!
         {
             try
             {
-                if (User != null)
+                // 1. Biztonságosan kiszedjük a bejelentkezett felhasználó ID-ját a tokenből
+                var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userIdClaim))
                 {
-                    return Ok(new
-                    {
-                      Id = User.FindFirstValue(ClaimTypes.NameIdentifier),
-                      UserName = User.Identity?.Name,
-                      Email = User.FindFirstValue(ClaimTypes.Email),
-                      Role = User.FindFirstValue(ClaimTypes.Role)
-                    });
+                    return BadRequest(new { error = "Nem található felhasználói azonosító." });
                 }
-                else
+
+                // Átalakítjuk uint-re (vagy int-re, attól függően, mi a típusa a User modelledben)
+                uint currentUserId = uint.Parse(userIdClaim);
+
+                // 2. Megkeressük a felhasználót az adatbázisban (itt van a valós, friss Profile_Pic!)
+                var dbUser = await _context.Users.FindAsync(currentUserId);
+                if (dbUser == null)
                 {
-                    return BadRequest(new { error ="nem található cookie"});
+                    return NotFound(new { error = "A felhasználó nem található az adatbázisban." });
                 }
+
+                // 3. Visszaadjuk a friss, adatbázisból kiolvasott adatokat a frontendnek
+                return Ok(new
+                {
+                    Id = dbUser.Id,
+                    UserName = dbUser.UserName,
+                    Email = dbUser.Email,
+                    Role = dbUser.Role,
+                    ProfilePicture = dbUser.Profile_Pic ?? "default.png" // Így frissítéskor mindig a jó kép jön vissza!
+                });
             }
             catch (Exception)
             {
@@ -191,8 +208,146 @@ namespace WebApplication1.Controllers
             }
         }
 
-    }
 
-    
+        [Authorize]
+        [HttpPut("updateUserName")]
+        public async Task<IActionResult> UpdateUserName([FromBody] UpdateUserNameDto dto)
+        {
+            try
+            {
+                if (dto == null || string.IsNullOrWhiteSpace(dto.Username))
+                {
+                    return BadRequest(new { error = "A felhasználónév nem lehet üres." });
+                }
+
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userIdClaim))
+                {
+                    return Unauthorized(new { error = "Nem található felhasználói azonosító ." });
+                }
+                uint curreuntUserId = uint.Parse(userIdClaim);
+
+                bool nameExists = await _context.Users.AnyAsync(u => u.UserName == dto.Username && u.Id != curreuntUserId);
+                if (nameExists)
+                {
+                    return BadRequest(new { error = "A megadott felhasználónév már foglalt." });
+                }
+
+                var user = await _context.Users.FindAsync(curreuntUserId);
+                if (user == null)
+                {
+                    return NotFound(new { error = "Felhasználó nem található." });
+                }
+
+                user.UserName = dto.Username;
+                await _context.SaveChangesAsync();
+
+                var newToken = GenerateJwtToken(user);
+                var cookieOptions = new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.Strict,
+                    Expires = DateTime.UtcNow.AddDays(14)
+                };
+                Response.Cookies.Append("X-Auth-token", newToken, cookieOptions);
+                return Ok(new { message = "Felhasználónév sikeresen frissítve." });
+
+            }
+            catch (Exception ex)
+            {
+
+
+                return StatusCode(500, new { error = $"Szerverhiba: {ex.Message}", details = ex.InnerException?.Message });
+            }
+        }
+
+        [Authorize]
+        [HttpPost("uploadPfp")]
+        public async Task<IActionResult> UploadProfilePicture([FromForm] IFormFile file)
+        {
+            try
+            {
+                // 1. Validáció: Van-e egyáltalán fájl?
+                if (file == null || file.Length == 0)
+                {
+                    return BadRequest(new { error = "Nem választottál ki fájlt." });
+                }
+
+                // 2. Biztonság: Fájlméret korlátozása (pl. max 5 MB)
+                if (file.Length > 5 * 1024 * 1024)
+                {
+                    return BadRequest(new { error = "A fájl mérete nem haladhatja meg az 5 MB-ot." });
+                }
+
+                // 3. Biztonság: Kiterjesztés ellenőrzése
+                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+                var extension = Path.GetExtension(file.FileName).ToLower();
+                if (!allowedExtensions.Contains(extension))
+                {
+                    return BadRequest(new { error = "Csak .jpg, .jpeg, .png, .webp vagy .gif formátumú képek tölthetők fel." });
+                }
+
+                // 4. Felhasználó beazonosítása
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userIdClaim))
+                {
+                    return Unauthorized(new { error = "Nem található felhasználói azonosító." });
+                }
+                uint currentUserId = uint.Parse(userIdClaim);
+
+                var user = await _context.Users.FindAsync(currentUserId);
+                if (user == null)
+                {
+                    return NotFound(new { error = "A felhasználó nem található." });
+                }
+
+                // 5. Mappa kezelése: Biztosra megyünk és manuálisan lőjük be a wwwroot/uploads mappát
+                string rootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+                string uploadsFolder = Path.Combine(rootPath, "uploads");
+
+                if (!Directory.Exists(uploadsFolder))
+                {
+                    Directory.CreateDirectory(uploadsFolder);
+                }
+
+                // 6. Biztonság: Egyedi név generálása Guid segítségével... (Ez a részed maradhat változatlan)
+                string uniqueFileName = $"pfp_{currentUserId}_{Guid.NewGuid()}{extension}";
+                string filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                // 7. Opcionális: Régi kép törlése, ha már volt neki (nem szemeteljük a szervert)
+                // JAVÍTÁS: Ellenőrizzük, hogy a régi kép nem a default-e, mert azt NEM akarjuk letörölni a lemezről!
+                if (!string.IsNullOrEmpty(user.Profile_Pic) && user.Profile_Pic != "default.jpg" && user.Profile_Pic != "default.png")
+                {
+                    string oldFilePath = Path.Combine(uploadsFolder, user.Profile_Pic);
+                    if (System.IO.File.Exists(oldFilePath))
+                    {
+                        System.IO.File.Delete(oldFilePath);
+                    }
+                }
+
+                // 8. Fájl elmentése a lemezre
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                // 9. Új fájlnév mentése az adatbázisba a User entitásba
+                // (Feltételezve, hogy a User.cs-ben létrehoztad a public string? ProfilePicture { get; set; } tulajdonságot)
+                user.Profile_Pic = uniqueFileName;
+                await _context.SaveChangesAsync();
+
+                // 10. Visszatérési érték a frontendnek az új kép elérési útjával
+                string relativeUrl = $"/uploads/{uniqueFileName}";
+                return Ok(new { message = "Profilkép sikeresen frissítve.", profilePicture = relativeUrl });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = $"Szerverhiba a kép mentése során: {ex.Message}" });
+            }
+
+        }
+
+    }
 }
 
