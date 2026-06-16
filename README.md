@@ -53,6 +53,6 @@ https://documenter.getpostman.com/view/48108190/2sBXwtppHo
 ├── Program.cs
 ├── appsettings.json
 └── WebApplication1.sln
-Technologies & Packages UsedBackend DependenciesMicrosoft.AspNetCore.Authentication.JwtBearer (Token validation)Microsoft.EntityFrameworkCore.MySql (Database connection via Pomelo)BCrypt.Net-Next (Secure password hashing)System.IdentityModel.Tokens.Jwt (JWT token generation)Frontend Dependenciesreact (Frontend UI library)react-router-dom (Client-side routing & navigation)bootstrap (Styling framework & responsive navbar layouts)axios / api-client (Handling HTTP requests with credentials)Development ToolsVisual StudioPostmanMySQL / PhpMyAdminGitHubAPI & Postman DocumentationThe backend API endpoints are fully mapped, secured, and tested. You can find the interactive documentation below:Virus Scanner Postman DocumentationCore Endpoints SummaryMethodEndpointAuthenticationDescriptionPOST/api/auth/registerNoneRegisters a new user with default settings.POST/api/auth/loginNoneAuthenticates user, sets X-Auth-Token HttpOnly cookie.POST/api/auth/logoutNoneClears the X-Auth-Token cookie instantly.GET/api/auth/whoami[Authorize]Fetches active user state directly from the database.PUT/api/auth/updateUserName[Authorize]Updates profile username and refreshes auth data.POST/api/auth/uploadPfp[Authorize]Uploads a profile picture to wwwroot/uploads/.GET/api/auth/history[Authorize]Returns the file scanning history for the logged-in user.
+
 
 
