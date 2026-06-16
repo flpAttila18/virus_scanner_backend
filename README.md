@@ -12,8 +12,6 @@
 
 ## Database Schema (MySQL)
 
-postman test : 
-https://documenter.getpostman.com/view/48108190/2sBXwtppHo
 
 ### users
 - `Id` (uint / int, PK)
@@ -31,6 +29,11 @@ https://documenter.getpostman.com/view/48108190/2sBXwtppHo
 - `userId` (int, FK to users.Id)
 
 ---
+
+###postman test : 
+https://documenter.getpostman.com/view/48108190/2sBXwtppHo
+
+
 
 ## Project Structure
 
